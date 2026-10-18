@@ -1,0 +1,15 @@
+# The model server (llama-server) runs directly on the LinuxONE host (see
+# scripts/setup_llamacpp_s390x.sh); this container reaches it over the host network.
+services:
+  api:
+    build: .
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      SHIELD_BACKEND: llm
+      LOOP_LLM_BASE_URL: http://127.0.0.1:8080/v1
+      SHIELD_MAX_ROUNDS: "3"
+      SHIELD_VAULT_KEY: ${SHIELD_VAULT_KEY:-}
+      EXTERNAL_LLM_BASE_URL: ${EXTERNAL_LLM_BASE_URL:-}
+      EXTERNAL_LLM_MODEL: ${EXTERNAL_LLM_MODEL:-}
+      EXTERNAL_LLM_API_KEY: ${EXTERNAL_LLM_API_KEY:-}

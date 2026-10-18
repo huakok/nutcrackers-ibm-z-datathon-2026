@@ -1,0 +1,4 @@
+# Core runs on the Python standard library alone. These are optional:
+cryptography>=42      # encrypts the placeholder vault (on Ubuntu s390x: apt install python3-cryptography)
+matplotlib>=3.8       # charts from shield.evaluate (laptop only is fine)
+# presidio-analyzer>=2.2   # better name detection; set SHIELD_USE_PRESIDIO=1 (needs spaCy + an English model)

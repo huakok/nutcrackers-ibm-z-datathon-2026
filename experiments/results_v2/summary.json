@@ -1,0 +1,47 @@
+{
+  "documents": 12,
+  "skipped_documents": 0,
+  "backend": "llm",
+  "attacker_accuracy": {
+    "raw": 0.59,
+    "basic": 0.639,
+    "loop": 0.23
+  },
+  "by_attribute": {
+    "age": {
+      "raw": 1.0,
+      "basic": 1.0,
+      "loop": 0.2
+    },
+    "sex": {
+      "raw": 0.75,
+      "basic": 0.833,
+      "loop": 0.5
+    },
+    "region": {
+      "raw": 0.364,
+      "basic": 0.545,
+      "loop": 0.182
+    },
+    "occupation": {
+      "raw": 0.667,
+      "basic": 0.556,
+      "loop": 0.0
+    },
+    "education": {
+      "raw": 0.1,
+      "basic": 0.2,
+      "loop": 0.2
+    },
+    "relationship": {
+      "raw": 0.667,
+      "basic": 0.667,
+      "loop": 0.222
+    }
+  },
+  "pass_rate": 0.75,
+  "mean_rounds": 2.67,
+  "median_loop_seconds": 122.777,
+  "mean_word_retention": 0.636,
+  "total_seconds": 2982.7
+}

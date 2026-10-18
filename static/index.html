@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attack-Tested Redaction</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --surface: #ffffff; --border: #e4e3df; --text: #1a1a19; --muted: #5f5e5a;
+    --accent: #2a78d6; --accent-soft: #e6f0fb; --leak: #fde8e4; --leak-ink: #a3321b;
+    --ok: #0f7a3d; --ok-soft: #e3f4ea; --ph: #ede9fb; --ph-ink: #4b3bb5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141413; --surface: #1d1d1c; --border: #33332f; --text: #f0efec; --muted: #a9a89f;
+      --accent: #5a9cea; --accent-soft: #1d2c40; --leak: #3d2420; --leak-ink: #f2a08d;
+      --ok: #5cc98a; --ok-soft: #173325; --ph: #2a2547; --ph-ink: #b8aef5;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141413; --surface: #1d1d1c; --border: #33332f; --text: #f0efec; --muted: #a9a89f;
+    --accent: #5a9cea; --accent-soft: #1d2c40; --leak: #3d2420; --leak-ink: #f2a08d;
+    --ok: #5cc98a; --ok-soft: #173325; --ph: #2a2547; --ph-ink: #b8aef5;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+  h1 { font-size: 22px; margin: 0; }
+  h2 { font-size: 16px; margin: 0 0 8px; }
+  .sub { color: var(--muted); margin: 4px 0 20px; }
+  .badge { font-size: 12px; padding: 3px 10px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  textarea, input { width: 100%; font: inherit; color: inherit; background: var(--bg);
+                    border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+  textarea { min-height: 170px; resize: vertical; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+  button { font: inherit; font-weight: 600; border: 0; border-radius: 8px; padding: 9px 16px; cursor: pointer;
+           background: var(--accent); color: #fff; }
+  button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--border); }
+  button:disabled { opacity: .5; cursor: wait; }
+  .doc { white-space: pre-wrap; background: var(--bg); border-radius: 8px; padding: 12px; font-size: 14px; }
+  mark.leak { background: var(--leak); color: var(--leak-ink); border-radius: 3px; padding: 0 2px; }
+  span.ph { background: var(--ph); color: var(--ph-ink); border-radius: 3px; padding: 0 3px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 8px 0 12px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .verdict { font-weight: 700; padding: 10px 14px; border-radius: 8px; }
+  .verdict.pass { background: var(--ok-soft); color: var(--ok); }
+  .verdict.fail { background: var(--leak); color: var(--leak-ink); }
+  .muted { color: var(--muted); font-size: 13px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+  code { font-size: 12px; word-break: break-all; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Attack-Tested Redaction</h1>
+    <span class="badge" id="health">checking server…</span>
+  </header>
+  <p class="sub">Redact a document, then watch an attacker AI try to unmask it. Only text the attacker can't crack leaves this machine.</p>
+
+  <section class="card">
+    <h2>1. Document</h2>
+    <textarea id="doc">Hi team,
+
+Following up on Ms Rachel Tan's request for flexible working hours (NRIC S1234567D). She is our only female lead engineer on the Tuas plant retrofit and just turned 34 last month. Her mother's dialysis appointments at the clinic near her flat in Bukit Batok clash with the Thursday night shift. She only finished her part-time NUS master's in March, so let's try to keep her.
+
+Please contact Rachel at +65 9123 4567 or rachel.tan@example.com. Any back pay goes to her DBS account 123-45678-9.
+
+Thanks,
+HR Operations</textarea>
+    <div class="row">
+      <button id="run">Protect document</button>
+      <span class="muted" id="status"></span>
+    </div>
+  </section>
+
+  <div id="out"></div>
+
+  <section class="card" id="askCard" hidden>
+    <h2>5. Ask an outside AI (it only ever sees the cleaned text)</h2>
+    <input id="question" value="Draft a short reply approving this request.">
+    <div class="row"><button id="ask" class="secondary">Ask</button><span class="muted" id="askStatus"></span></div>
+    <div id="askOut"></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const phs = (s) => esc(s).replace(/\[[A-Z]+_\d+\]/g, (m) => `<span class="ph">${m}</span>`);
+let session = null;
+
+function highlight(text, phrases) {
+  let html = phs(text);
+  [...new Set(phrases)].sort((a, b) => b.length - a.length).forEach((p) => {
+    if (!p) return;
+    const pattern = esc(p).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    html = html.replace(new RegExp(`(?<![\\w>])${pattern}(?![\\w<])`, "gi"), (m) => `<mark class="leak">${m}</mark>`);
+  });
+  return html;
+}
+
+async function post(path, body) {
+  const res = await fetch(path, {method: "POST", body: JSON.stringify(body)});
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+fetch("/health").then((r) => r.json()).then((h) => {
+  $("health").textContent = `running on ${h.machine} · backend: ${h.backend}`;
+}).catch(() => { $("health").textContent = "server not reachable"; });
+
+$("run").onclick = async () => {
+  $("run").disabled = true; $("status").textContent = "Attacking and rewriting… (can take a while on a local model)";
+  $("out").innerHTML = ""; $("askCard").hidden = true;
+  try {
+    const r = await post("/protect", {text: $("doc").value});
+    session = r.session_id;
+    const firstEvidence = (r.rounds[0]?.guesses || []).flatMap((g) => g.evidence);
+    let html = `<section class="card"><h2>2. Basic redaction (what normal tools stop at)</h2>
+      <div class="doc">${highlight(r.redacted, firstEvidence)}</div>
+      <p class="muted">Names and IDs are gone, but the <mark class="leak">highlighted</mark> clues still give the person away.</p></section>`;
+    html += `<section class="card"><h2>3. Attack-and-fix rounds</h2>`;
+    r.rounds.forEach((rd) => {
+      const rows = rd.guesses.map((g) => `<tr><td>${esc(g.attribute)}</td><td>${esc(g.value)}</td>
+        <td>${Math.round(g.confidence * 100)}%</td><td>${g.evidence.map((e) => `“${esc(e)}”`).join(", ")}</td></tr>`).join("");
+      html += `<h2>Round ${rd.number}: attacker ${rd.leaks.length ? `found ${rd.leaks.length} leak(s)` : "found nothing"}
+        <span class="muted">· ${rd.seconds.toFixed(2)}s${rd.used_ai_rewrite ? " · AI rewrite" : rd.leaks.length ? " · clues suppressed" : ""}</span></h2>
+        ${rows ? `<table><tr><th>Attribute</th><th>Guess</th><th>Confidence</th><th>Evidence</th></tr>${rows}</table>`
+               : `<p class="muted">No attribute could be inferred.</p>`}`;
+    });
+    html += `</section>`;
+    html += `<section class="card"><h2>4. Result</h2>
+      <p class="verdict ${r.passed ? "pass" : "fail"}">${r.passed
+        ? "Passed: the attacker could not infer any personal detail with confidence."
+        : "Not cleared: leaks remain after the maximum rounds. Do not upload."}</p>
+      <div class="grid"><div><p class="muted">Text that may leave this machine</p><div class="doc">${phs(r.text)}</div></div>
+      <div><p class="muted">Encrypted vault (${r.encrypted_vault ? "encrypted" : "NOT encrypted: install cryptography"})</p>
+      <table>${Object.entries(r.vault_preview).map(([k, v]) => `<tr><td><span class="ph">${k}</span></td><td><code>${esc(v)}</code></td></tr>`).join("")}</table></div></div>
+      <p class="muted">Total ${r.seconds}s · ${r.rounds.length} round(s)</p></section>`;
+    $("out").innerHTML = html;
+    $("askCard").hidden = false; $("status").textContent = "";
+  } catch (e) { $("status").textContent = "Error: " + e.message; }
+  $("run").disabled = false;
+};
+
+$("ask").onclick = async () => {
+  $("ask").disabled = true; $("askStatus").textContent = "Asking…";
+  try {
+    const r = await post("/ask", {session_id: session, question: $("question").value});
+    $("askOut").innerHTML = `<div class="grid"><div><p class="muted">Outside AI's answer (it only saw placeholders)</p>
+      <div class="doc">${phs(r.answer_with_placeholders)}</div></div>
+      <div><p class="muted">Restored on this machine</p><div class="doc">${esc(r.answer)}</div></div></div>`;
+    $("askStatus").textContent = "";
+  } catch (e) { $("askStatus").textContent = "Error: " + e.message; }
+  $("ask").disabled = false;
+};
+</script>
+</body>
+</html>
